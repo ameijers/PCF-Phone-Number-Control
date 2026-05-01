@@ -1,0 +1,30 @@
+.phone-number-control {
+  width: 100%;
+}
+
+.phone-number-control__input {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid #8a8886;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #201f1e;
+  font: 400 14px/1.4 "Segoe UI", sans-serif;
+  box-sizing: border-box;
+}
+
+.phone-number-control__input:focus {
+  outline: 2px solid #0f6cbd;
+  outline-offset: 1px;
+  border-color: #0f6cbd;
+}
+
+.phone-number-control__input[aria-invalid="true"] {
+  border-color: #a4262c;
+}
+
+.phone-number-control__input:disabled {
+  background: #f3f2f1;
+  color: #605e5c;
+}

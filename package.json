@@ -1,0 +1,20 @@
+{
+  "name": "pcf-phone-number-control",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Dynamics 365 PCF control for phone number formatting and E.164 storage.",
+  "scripts": {
+    "build": "pcf-scripts build",
+    "clean": "pcf-scripts clean",
+    "rebuild": "pcf-scripts rebuild",
+    "start": "pcf-start"
+  },
+  "dependencies": {
+    "libphonenumber-js": "latest"
+  },
+  "devDependencies": {
+    "pcf-scripts": "latest",
+    "pcf-start": "latest",
+    "typescript": "latest"
+  }
+}
