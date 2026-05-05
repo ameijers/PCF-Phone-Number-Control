@@ -8,6 +8,7 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
+    "types": ["powerapps-component-framework"],
     "typeRoots": ["./node_modules/@types"]
   },
   "include": ["index.ts", "generated/**/*.d.ts"]

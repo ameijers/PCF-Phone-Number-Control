@@ -1,8 +1,12 @@
-declare interface IInputs {
-  phoneNumber: ComponentFramework.PropertyTypes.StringProperty;
-  defaultRegion: ComponentFramework.PropertyTypes.StringProperty;
-}
+/*
+*This is auto generated from the ControlManifest.Input.xml file
+*/
 
-declare interface IOutputs {
-  phoneNumber?: string;
+// Define IInputs and IOutputs Type. They should match with ControlManifest.
+export interface IInputs {
+    phoneNumber: ComponentFramework.PropertyTypes.StringProperty;
+    defaultRegion: ComponentFramework.PropertyTypes.StringProperty;
+}
+export interface IOutputs {
+    phoneNumber?: string;
 }

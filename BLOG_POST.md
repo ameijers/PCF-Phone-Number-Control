@@ -121,7 +121,29 @@ The solution is intentionally small and focused:
 - `index.ts` contains the control logic.
 - `css/PhoneNumberControl.css` provides field styling.
 - `strings/PhoneNumberControl.1033.resx` contains display labels and descriptions.
-- `README.md` documents the local setup and behavior.
+- `PhoneNumberControl.pcfproj` enables Dataverse solution packaging.
+- `INSTALLATION.md` documents installation, packaging, and validation steps.
+
+## Packaging and Install Notes
+
+To deploy this control to a Dataverse environment, build and package through a solution project (`pcfsolution`) and import the generated zip.
+
+For this repository, the package is generated at:
+
+- `pcfsolution/bin/Debug/pcfsolution.zip`
+
+The same output path is used for both unmanaged and managed builds, so if you need both files, copy or rename the unmanaged zip before running the managed build.
+
+## How to Verify It Worked
+
+After importing the solution and binding the control to a phone field:
+
+1. Verify solution import completed successfully.
+2. Verify the control is active on the phone field and the form is published.
+3. Enter local and international numbers and save the record.
+4. Confirm the displayed value is cleanly formatted.
+5. Confirm the stored Dataverse value is E.164.
+6. Test invalid input and confirm it does not persist as a valid E.164 value.
 
 This keeps the control easy to maintain and easy to extend.
 

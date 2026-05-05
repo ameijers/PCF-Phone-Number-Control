@@ -1,0 +1,56 @@
+{
+  "format": 1,
+  "restore": {
+    "/Users/alexander.meijers/Github/PCF Phone Number Control/PhoneNumberControl.pcfproj": {}
+  },
+  "projects": {
+    "/Users/alexander.meijers/Github/PCF Phone Number Control/PhoneNumberControl.pcfproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "/Users/alexander.meijers/Github/PCF Phone Number Control/PhoneNumberControl.pcfproj",
+        "projectName": "PhoneNumberControl",
+        "projectPath": "/Users/alexander.meijers/Github/PCF Phone Number Control/PhoneNumberControl.pcfproj",
+        "packagesPath": "/Users/alexander.meijers/.nuget/packages/",
+        "outputPath": "/Users/alexander.meijers/Github/PCF Phone Number Control/obj/",
+        "projectStyle": "PackageReference",
+        "UsingMicrosoftNETSdk": false,
+        "configFilePaths": [
+          "/Users/alexander.meijers/.nuget/NuGet/NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net462"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net462": {
+            "targetAlias": "net462",
+            "projectReferences": {}
+          }
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net462": {
+          "targetAlias": "net462",
+          "dependencies": {
+            "Microsoft.NETFramework.ReferenceAssemblies": {
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[1.0.0, )"
+            },
+            "Microsoft.PowerApps.MSBuild.Pcf": {
+              "target": "Package",
+              "version": "[1.*, )"
+            }
+          }
+        }
+      }
+    }
+  }
+}

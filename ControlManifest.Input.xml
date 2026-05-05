@@ -3,7 +3,7 @@
   <control
     namespace="Promethean.Academy.Controls"
     constructor="PhoneNumberControl"
-    version="0.1.0"
+    version="0.2.0"
     display-name-key="PhoneNumberControl_Display_Name"
     description-key="PhoneNumberControl_Description"
     control-type="standard">

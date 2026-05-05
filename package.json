@@ -13,6 +13,7 @@
     "libphonenumber-js": "latest"
   },
   "devDependencies": {
+    "@types/powerapps-component-framework": "latest",
     "pcf-scripts": "latest",
     "pcf-start": "latest",
     "typescript": "latest"
