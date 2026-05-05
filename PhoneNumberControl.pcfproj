@@ -42,9 +42,11 @@
   <Import Project="$(MSBuildToolsPath)\Microsoft.Common.targets" />
   <Import Project="$(PowerAppsTargetsPath)\Microsoft.PowerApps.VisualStudio.Pcf.targets" Condition="Exists('$(PowerAppsTargetsPath)\Microsoft.PowerApps.VisualStudio.Pcf.targets')" />
 
-  <Target Name="GetProjectOutputPath">
+  <Target Name="GetProjectOutputPath" Returns="@(ProjectOutputPath)">
     <ItemGroup>
-      <TargetOutputs Include="$(MSBuildThisFileDirectory)out" />
+      <ProjectOutputPath Include="$(MSBuildThisFileDirectory)out">
+        <PowerAppsComponentType>Pcf</PowerAppsComponentType>
+      </ProjectOutputPath>
     </ItemGroup>
   </Target>
 
