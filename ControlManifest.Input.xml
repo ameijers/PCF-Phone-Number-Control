@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <manifest>
   <control
-    namespace="AlexM.Controls"
+    namespace="Promethean.Academy.Controls"
     constructor="PhoneNumberControl"
     version="0.1.0"
     display-name-key="PhoneNumberControl_Display_Name"

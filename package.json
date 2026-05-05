@@ -1,5 +1,5 @@
 {
-  "name": "pcf-phone-number-control",
+  "name": "promethean-academy-pcf-phone-number-control",
   "version": "0.1.0",
   "private": true,
   "description": "Dynamics 365 PCF control for phone number formatting and E.164 storage.",

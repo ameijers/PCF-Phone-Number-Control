@@ -17,6 +17,10 @@ The workspace expects Node.js, npm, and the Power Platform PCF toolchain package
 2. Build the control with `npm run build`.
 3. Use the normal PCF packaging flow to add the control to a Dataverse solution.
 
+## Install in a Dataverse environment
+
+See [INSTALLATION.md](INSTALLATION.md) for full step-by-step deployment instructions.
+
 ## Bound properties
 
 - `phoneNumber`: bound to a Dataverse phone number column.
