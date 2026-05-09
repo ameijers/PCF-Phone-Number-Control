@@ -13,10 +13,10 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="PhoneNumberControl_Display_Name" xml:space="preserve">
-    <value>Phone Number Control</value>
+    <value>PA Phone Number (E.164)</value>
   </data>
   <data name="PhoneNumberControl_Description" xml:space="preserve">
-    <value>Formats phone numbers for display and stores them in E.164.</value>
+    <value>Formats phone numbers, stores E.164, and adds a click-to-dial button.</value>
   </data>
   <data name="PhoneNumber_Field_Display_Name" xml:space="preserve">
     <value>Phone Number</value>
@@ -25,9 +25,9 @@
     <value>The bound phone number column.</value>
   </data>
   <data name="DefaultRegion_Display_Name" xml:space="preserve">
-    <value>Default Region</value>
+    <value>Default Region (Static, Optional)</value>
   </data>
   <data name="DefaultRegion_Description" xml:space="preserve">
-    <value>Two-letter ISO region code used when users enter local numbers without a + prefix, for example NL.</value>
+    <value>Use a two-letter ISO country code such as NL or US when users type local numbers without +. Set this as a Static value unless you specifically want to bind it to another column.</value>
   </data>
 </root>

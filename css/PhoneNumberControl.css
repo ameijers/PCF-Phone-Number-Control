@@ -1,4 +1,18 @@
 .phone-number-control {
+  --phone-border-color: var(--pcf-phone-border-color, var(--cds-color-neutralStroke1, var(--neutralStroke1, #d2d0ce)));
+  --phone-border-color-focus: var(--pcf-phone-border-color-focus, var(--cds-color-brandStroke1, var(--brandStroke1, #0f6cbd)));
+  --phone-border-color-invalid: var(--pcf-phone-border-color-invalid, var(--cds-color-statusDangerBorder1, var(--statusDangerBorder1, #a4262c)));
+  --phone-background: var(--pcf-phone-background, var(--cds-color-neutralBackground1, var(--neutralBackground1, #ffffff)));
+  --phone-background-disabled: var(--pcf-phone-background-disabled, var(--cds-color-neutralBackground3, var(--neutralBackground3, #f3f2f1)));
+  --phone-text: var(--pcf-phone-text, var(--cds-color-neutralForeground1, var(--neutralForeground1, #201f1e)));
+  --phone-text-disabled: var(--pcf-phone-text-disabled, var(--cds-color-neutralForeground3, var(--neutralForeground3, #605e5c)));
+  --phone-action-separator: var(--pcf-phone-action-separator, var(--cds-color-neutralStroke2, var(--neutralStroke2, #e1dfdd)));
+  --phone-action-icon: var(--pcf-phone-action-icon, var(--cds-color-neutralForeground3, var(--neutralForeground3, #605e5c)));
+  --phone-action-icon-hover: var(--pcf-phone-action-icon-hover, var(--cds-color-neutralForeground2, var(--neutralForeground2, #323130)));
+  --phone-action-icon-active: var(--pcf-phone-action-icon-active, var(--cds-color-neutralForeground1, var(--neutralForeground1, #201f1e)));
+  --phone-action-background-hover: var(--pcf-phone-action-background-hover, var(--cds-color-neutralBackground3Hover, var(--neutralBackground3Hover, #edebe9)));
+  --phone-action-background-active: var(--pcf-phone-action-background-active, var(--cds-color-neutralBackground3Pressed, var(--neutralBackground3Pressed, #e1dfdd)));
+  --phone-action-icon-disabled: var(--pcf-phone-action-icon-disabled, var(--cds-color-neutralForegroundDisabled, var(--neutralForegroundDisabled, #a19f9d)));
   width: 100%;
 }
 
@@ -7,41 +21,42 @@
   display: flex;
   align-items: center;
   width: 100%;
-  border: 1px solid #8a8886;
-  border-radius: 4px;
-  background: #ffffff;
+  min-height: 33px;
+  border: 1px solid var(--phone-border-color);
+  border-radius: 2px;
+  background: var(--phone-background);
   box-sizing: border-box;
 }
 
 .phone-number-control__wrapper:focus-within {
-  outline: 2px solid #0f6cbd;
-  outline-offset: 1px;
-  border-color: #0f6cbd;
+  outline: 1px solid var(--phone-border-color-focus);
+  outline-offset: 0;
+  border-color: var(--phone-border-color-focus);
 }
 
-.phone-number-control__wrapper:has(.phone-number-control__input[aria-invalid="true"]) {
-  border-color: #a4262c;
+.phone-number-control__wrapper--invalid {
+  border-color: var(--phone-border-color-invalid);
 }
 
-.phone-number-control__wrapper:has(.phone-number-control__input:disabled) {
-  background: #f3f2f1;
-  border-color: #8a8886;
+.phone-number-control__wrapper--disabled {
+  background: var(--phone-background-disabled);
+  border-color: var(--phone-border-color);
 }
 
 .phone-number-control__input {
   flex: 1;
-  min-height: 34px;
-  padding: 6px 10px;
+  min-height: 33px;
+  padding: 6px 8px;
   border: none;
   background: transparent;
-  color: #201f1e;
+  color: var(--phone-text);
   font: 400 14px/1.4 "Segoe UI", sans-serif;
   box-sizing: border-box;
   outline: none;
 }
 
 .phone-number-control__input:disabled {
-  color: #605e5c;
+  color: var(--phone-text-disabled);
 }
 
 /* Dial button: phone handset icon, matches Dynamics standard phone field */
@@ -52,26 +67,28 @@
   flex-shrink: 0;
   width: 32px;
   height: 32px;
-  margin: 1px;
+  margin: 0;
   padding: 0;
   border: none;
-  border-radius: 2px;
+  border-left: 1px solid var(--phone-action-separator);
+  border-radius: 0 2px 2px 0;
   background: transparent;
-  color: #0f6cbd;
+  color: var(--phone-action-icon);
   cursor: pointer;
   transition: background 0.1s, color 0.1s;
 }
 
 .phone-number-control__dial-button:hover:not(:disabled) {
-  background: #deecf9;
-  color: #0c5fa5;
+  background: var(--phone-action-background-hover);
+  color: var(--phone-action-icon-hover);
 }
 
 .phone-number-control__dial-button:active:not(:disabled) {
-  background: #c7e0f4;
+  background: var(--phone-action-background-active);
+  color: var(--phone-action-icon-active);
 }
 
 .phone-number-control__dial-button:disabled {
-  color: #a19f9d;
+  color: var(--phone-action-icon-disabled);
   cursor: default;
 }

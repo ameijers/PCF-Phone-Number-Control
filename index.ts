@@ -1,10 +1,27 @@
-import { AsYouType, CountryCode, parsePhoneNumberFromString } from "libphonenumber-js";
+import { AsYouType, CountryCode, isSupportedCountry, parsePhoneNumberFromString } from "libphonenumber-js";
 import { IInputs, IOutputs } from "./generated/ManifestTypes";
 
 type MaybeString = string | null | undefined;
 
-// Fluent UI phone handset icon path, matches the Dynamics standard phone field icon
-const PHONE_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2048 2048" width="16" height="16" focusable="false" aria-hidden="true"><path d="M1971 1538q26 102-17 197t-131 147l-170 114q-70 47-153 71t-167 24q-117 0-229-40t-211-108q-182-122-338-278T478 1338Q356 1156 234 974T126 745q-40-118-40-230 0-84 24-167t71-153L295 225q52-88 147-131t197-17l74 18q46 11 88 35t74 60l338 432q32 41 43 90t-1 99l-88 264q-8 24-6 48t14 44l336 335q20 12 44 14t48-6l264-88q48-12 97-1t91 43l432 338q37 32 60 74t35 88z"/></svg>`;
+const SVG_NS = "http://www.w3.org/2000/svg";
+const PHONE_ICON_PATH =
+  "M1971 1538q26 102-17 197t-131 147l-170 114q-70 47-153 71t-167 24q-117 0-229-40t-211-108q-182-122-338-278T478 1338Q356 1156 234 974T126 745q-40-118-40-230 0-84 24-167t71-153L295 225q52-88 147-131t197-17l74 18q46 11 88 35t74 60l338 432q32 41 43 90t-1 99l-88 264q-8 24-6 48t14 44l336 335q20 12 44 14t48-6l264-88q48-12 97-1t91 43l432 338q37 32 60 74t35 88z";
+
+function createPhoneIcon(): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", "0 0 2048 2048");
+  svg.setAttribute("width", "14");
+  svg.setAttribute("height", "14");
+  svg.setAttribute("focusable", "false");
+  svg.setAttribute("aria-hidden", "true");
+
+  const path = document.createElementNS(SVG_NS, "path");
+  path.setAttribute("fill", "currentColor");
+  path.setAttribute("d", PHONE_ICON_PATH);
+  svg.appendChild(path);
+
+  return svg;
+}
 
 export class PhoneNumberControl implements ComponentFramework.StandardControl<IInputs, IOutputs> {
   private container!: HTMLDivElement;
@@ -45,7 +62,7 @@ export class PhoneNumberControl implements ComponentFramework.StandardControl<II
     this.dialButton.type = "button";
     this.dialButton.title = "Call";
     this.dialButton.setAttribute("aria-label", "Call");
-    this.dialButton.innerHTML = PHONE_ICON_SVG;
+    this.dialButton.appendChild(createPhoneIcon());
     this.dialButton.disabled = true;
     this.dialButton.addEventListener("click", this.handleDial);
 
@@ -75,15 +92,19 @@ export class PhoneNumberControl implements ComponentFramework.StandardControl<II
   private readonly handleDial = (): void => {
     if (!this.currentValue) return;
 
-    // Use Dynamics Channel Integration Framework (CCaaS soft phone) when available
-    const cif = (window as any).Microsoft?.CIFramework;
-    if (typeof cif?.outboundCommunication === "function") {
-      cif.outboundCommunication(this.currentValue);
-      return;
-    }
+    try {
+      // Use Dynamics Channel Integration Framework (CCaaS soft phone) when available
+      const cif = (window as any).Microsoft?.CIFramework;
+      if (typeof cif?.outboundCommunication === "function") {
+        cif.outboundCommunication(this.currentValue);
+        return;
+      }
 
-    // Fall back to tel: URI — OS or default calling app handles it
-    window.open(`tel:${this.currentValue}`);
+      // Fall back to tel: URI — OS or default calling app handles it
+      window.open(`tel:${this.currentValue}`);
+    } catch {
+      // Never let dial errors break interaction with the form.
+    }
   };
 
   private readonly handleInput = (): void => {
@@ -140,39 +161,60 @@ export class PhoneNumberControl implements ComponentFramework.StandardControl<II
     this.dialButton.disabled = true;
   };
 
+  private updateWrapperState(): void {
+    this.wrapper.classList.toggle("phone-number-control__wrapper--disabled", this.input.disabled);
+    this.wrapper.classList.toggle(
+      "phone-number-control__wrapper--invalid",
+      this.input.getAttribute("aria-invalid") === "true"
+    );
+  }
+
   private syncView(context: ComponentFramework.Context<IInputs>): void {
-    // Priority: explicit defaultRegion input → browser locale → undefined
-    this.defaultRegion =
-      this.normalizeRegion(context.parameters.defaultRegion.raw) ??
-      this.detectRegionFromLocale();
+    try {
+      const defaultRegionRaw = context.parameters?.defaultRegion?.raw;
+      const phoneNumberRaw = context.parameters?.phoneNumber?.raw;
 
-    const isDisabled = context.mode.isControlDisabled;
-    this.input.disabled = isDisabled;
-    // Hide dial button when the field is read-only/disabled
-    this.dialButton.style.display = isDisabled ? "none" : "flex";
+      // Priority: explicit defaultRegion input → browser locale → undefined
+      this.defaultRegion = this.normalizeRegion(defaultRegionRaw) ?? this.detectRegionFromLocale();
 
-    const boundValue = context.parameters.phoneNumber.raw ?? "";
-    const nextE164Value = this.toE164(boundValue) || this.currentValue;
+      const isDisabled = context.mode?.isControlDisabled ?? false;
+      this.input.disabled = isDisabled;
+      // Hide dial button when the field is read-only/disabled
+      this.dialButton.style.display = isDisabled ? "none" : "flex";
 
-    // Skip update only while the user is actively typing; always refresh after save
-    if (document.activeElement === this.input) {
-      return;
-    }
+      const boundValue = phoneNumberRaw ?? "";
+      const nextE164Value = this.toE164(boundValue) || this.currentValue;
 
-    this.currentValue = nextE164Value;
-    this.dialButton.disabled = !nextE164Value;
+      // Skip update only while the user is actively typing; always refresh after save
+      if (document.activeElement === this.input) {
+        return;
+      }
 
-    if (boundValue === "") {
+      this.currentValue = nextE164Value;
+      this.dialButton.disabled = !nextE164Value;
+
+      if (boundValue === "") {
+        this.input.value = "";
+        this.setValidity("", "");
+        return;
+      }
+
+      this.input.value = nextE164Value
+        ? this.formatForDisplay(nextE164Value)
+        : this.formatWhileTyping(boundValue);
+
+      this.setValidity(this.input.value, nextE164Value);
+      this.updateWrapperState();
+    } catch {
+      // Keep the control load-safe in form designer even if runtime context is incomplete.
+      this.defaultRegion = this.detectRegionFromLocale();
       this.input.value = "";
+      this.input.disabled = false;
+      this.dialButton.disabled = true;
+      this.dialButton.style.display = "flex";
       this.setValidity("", "");
-      return;
+      this.updateWrapperState();
     }
-
-    this.input.value = nextE164Value
-      ? this.formatForDisplay(nextE164Value)
-      : this.formatWhileTyping(boundValue);
-
-    this.setValidity(this.input.value, nextE164Value);
   }
 
   // Derive a country code from the browser's language tag, e.g. "nl-NL" → "NL"
@@ -186,13 +228,21 @@ export class PhoneNumberControl implements ComponentFramework.StandardControl<II
   }
 
   private toE164(value: string): string {
-    const parsedNumber = this.parsePhoneNumber(value);
-    return parsedNumber?.number ?? "";
+    try {
+      const parsedNumber = this.parsePhoneNumber(value);
+      return parsedNumber?.number ?? "";
+    } catch {
+      return "";
+    }
   }
 
   private formatForDisplay(value: string): string {
-    const parsedNumber = this.parsePhoneNumber(value);
-    return parsedNumber?.formatInternational() ?? this.formatWhileTyping(value);
+    try {
+      const parsedNumber = this.parsePhoneNumber(value);
+      return parsedNumber?.formatInternational() ?? this.formatWhileTyping(value);
+    } catch {
+      return this.formatWhileTyping(value);
+    }
   }
 
   private formatWhileTyping(value: string): string {
@@ -202,9 +252,13 @@ export class PhoneNumberControl implements ComponentFramework.StandardControl<II
       return "";
     }
 
-    const formatter = this.defaultRegion ? new AsYouType(this.defaultRegion) : new AsYouType();
-    const formattedValue = formatter.input(trimmedValue);
-    return formattedValue || trimmedValue;
+    try {
+      const formatter = this.defaultRegion ? new AsYouType(this.defaultRegion) : new AsYouType();
+      const formattedValue = formatter.input(trimmedValue);
+      return formattedValue || trimmedValue;
+    } catch {
+      return trimmedValue;
+    }
   }
 
   private parsePhoneNumber(value: string) {
@@ -238,11 +292,16 @@ export class PhoneNumberControl implements ComponentFramework.StandardControl<II
       return undefined;
     }
 
+    if (!isSupportedCountry(trimmedValue as CountryCode)) {
+      return undefined;
+    }
+
     return trimmedValue as CountryCode;
   }
 
   private setValidity(displayValue: string, e164Value: string): void {
     const isInvalid = displayValue !== "" && e164Value === "";
     this.input.setAttribute("aria-invalid", String(isInvalid));
+    this.updateWrapperState();
   }
 }

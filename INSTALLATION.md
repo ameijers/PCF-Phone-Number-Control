@@ -119,8 +119,14 @@ Use unmanaged in development/test and managed in production.
 
 1. Open the target table and form.
 2. Select the phone number field.
-3. Add a custom control and choose this Phone Number PCF control.
-4. Configure `defaultRegion` (for example `NL`, `BE`, or `DE`) when users enter local numbers.
+3. Add a custom control and choose `PA Phone Number (E.164)`.
+4. In component properties, map `Phone Number` to the current phone column.
+5. For `Default Region (Static, Optional)`, use a static value like `NL` or `US` if users type local numbers without `+`.
+
+Notes about the property pane:
+- The checkbox enables that property mapping for the current form factor.
+- The `Static` input means you are supplying a fixed text value directly (recommended for `Default Region`).
+- If `Static` is left empty, locale auto-detection is used as fallback.
 5. Save and publish.
 
 ## 9. Validate
