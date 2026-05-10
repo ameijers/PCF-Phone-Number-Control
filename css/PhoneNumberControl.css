@@ -75,9 +75,6 @@
   border-radius: 0 2px 2px 0;
   background: transparent;
   color: var(--phone-action-icon);
-  font-family: "Segoe MDL2 Assets", "FabricMDL2Icons";
-  font-size: 16px;
-  line-height: 1;
   cursor: pointer;
   transition: background 0.1s, color 0.1s;
 }
