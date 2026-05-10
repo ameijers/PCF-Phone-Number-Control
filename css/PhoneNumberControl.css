@@ -2,6 +2,7 @@
   --phone-border-color: var(--pcf-phone-border-color, var(--cds-color-neutralStroke1, var(--neutralStroke1, #d2d0ce)));
   --phone-border-color-focus: var(--pcf-phone-border-color-focus, var(--cds-color-brandStroke1, var(--brandStroke1, #0f6cbd)));
   --phone-border-color-invalid: var(--pcf-phone-border-color-invalid, var(--cds-color-statusDangerBorder1, var(--statusDangerBorder1, #a4262c)));
+  --phone-text-invalid: var(--pcf-phone-text-invalid, var(--cds-color-statusDangerForeground1, var(--statusDangerForeground1, #a4262c)));
   --phone-background: var(--pcf-phone-background, var(--cds-color-neutralBackground1, var(--neutralBackground1, #ffffff)));
   --phone-background-disabled: var(--pcf-phone-background-disabled, var(--cds-color-neutralBackground3, var(--neutralBackground3, #f3f2f1)));
   --phone-text: var(--pcf-phone-text, var(--cds-color-neutralForeground1, var(--neutralForeground1, #201f1e)));
@@ -74,6 +75,9 @@
   border-radius: 0 2px 2px 0;
   background: transparent;
   color: var(--phone-action-icon);
+  font-family: "Segoe MDL2 Assets", "FabricMDL2Icons";
+  font-size: 16px;
+  line-height: 1;
   cursor: pointer;
   transition: background 0.1s, color 0.1s;
 }
@@ -91,4 +95,10 @@
 .phone-number-control__dial-button:disabled {
   color: var(--phone-action-icon-disabled);
   cursor: default;
+}
+
+.phone-number-control__message {
+  margin-top: 4px;
+  font: 400 12px/1.3 "Segoe UI", sans-serif;
+  color: var(--phone-text-invalid);
 }

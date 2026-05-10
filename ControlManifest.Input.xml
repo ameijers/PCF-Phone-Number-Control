@@ -3,7 +3,7 @@
   <control
     namespace="Promethean.Academy.Controls"
     constructor="PhoneNumberControl"
-    version="0.2.5"
+    version="0.2.6"
     display-name-key="PhoneNumberControl_Display_Name"
     description-key="PhoneNumberControl_Description"
     control-type="standard">
@@ -24,7 +24,7 @@
     <resources>
       <code path="index.ts" order="1" />
       <css path="css/PhoneNumberControl.css" order="1" />
-      <resx path="strings/PhoneNumberControl.1033.resx" version="0.2.5" />
+      <resx path="strings/PhoneNumberControl.1033.resx" version="0.2.6" />
     </resources>
   </control>
 </manifest>

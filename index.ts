@@ -3,34 +3,19 @@ import { IInputs, IOutputs } from "./generated/ManifestTypes";
 
 type MaybeString = string | null | undefined;
 
-const SVG_NS = "http://www.w3.org/2000/svg";
-const PHONE_ICON_PATH =
-  "M1971 1538q26 102-17 197t-131 147l-170 114q-70 47-153 71t-167 24q-117 0-229-40t-211-108q-182-122-338-278T478 1338Q356 1156 234 974T126 745q-40-118-40-230 0-84 24-167t71-153L295 225q52-88 147-131t197-17l74 18q46 11 88 35t74 60l338 432q32 41 43 90t-1 99l-88 264q-8 24-6 48t14 44l336 335q20 12 44 14t48-6l264-88q48-12 97-1t91 43l432 338q37 32 60 74t35 88z";
-
-function createPhoneIcon(): SVGSVGElement {
-  const svg = document.createElementNS(SVG_NS, "svg");
-  svg.setAttribute("viewBox", "0 0 2048 2048");
-  svg.setAttribute("width", "14");
-  svg.setAttribute("height", "14");
-  svg.setAttribute("focusable", "false");
-  svg.setAttribute("aria-hidden", "true");
-
-  const path = document.createElementNS(SVG_NS, "path");
-  path.setAttribute("fill", "currentColor");
-  path.setAttribute("d", PHONE_ICON_PATH);
-  svg.appendChild(path);
-
-  return svg;
-}
+const VALIDATION_MESSAGE_TEXT = "Enter a valid phone number, for example +31 6 39896134.";
 
 export class PhoneNumberControl implements ComponentFramework.StandardControl<IInputs, IOutputs> {
   private container!: HTMLDivElement;
   private wrapper!: HTMLDivElement;
   private input!: HTMLInputElement;
   private dialButton!: HTMLButtonElement;
+  private validationMessage!: HTMLDivElement;
   private notifyOutputChanged!: () => void;
   private currentValue = "";
   private defaultRegion?: CountryCode;
+  private hasUncommittedInvalidInput = false;
+  private validationMessageId = `pcf-phone-validation-message-${Math.random().toString(36).slice(2, 10)}`;
 
   public init(
     context: ComponentFramework.Context<IInputs>,
@@ -53,22 +38,31 @@ export class PhoneNumberControl implements ComponentFramework.StandardControl<II
     this.input.inputMode = "tel";
     this.input.placeholder = "+31 6 39896134";
     this.input.autocomplete = "tel";
+    this.input.setAttribute("aria-describedby", this.validationMessageId);
     this.input.addEventListener("input", this.handleInput);
     this.input.addEventListener("blur", this.handleBlur);
 
-    // Dial button — matches the standard Dynamics phone icon behaviour
+    // Dial button — uses the standard MDL2 phone glyph Dynamics fields use.
     this.dialButton = document.createElement("button");
     this.dialButton.className = "phone-number-control__dial-button";
     this.dialButton.type = "button";
     this.dialButton.title = "Call";
     this.dialButton.setAttribute("aria-label", "Call");
-    this.dialButton.appendChild(createPhoneIcon());
+    this.dialButton.textContent = "\uE717";
     this.dialButton.disabled = true;
     this.dialButton.addEventListener("click", this.handleDial);
+
+    this.validationMessage = document.createElement("div");
+    this.validationMessage.id = this.validationMessageId;
+    this.validationMessage.className = "phone-number-control__message";
+    this.validationMessage.setAttribute("role", "alert");
+    this.validationMessage.setAttribute("aria-live", "polite");
+    this.validationMessage.hidden = true;
 
     this.wrapper.appendChild(this.input);
     this.wrapper.appendChild(this.dialButton);
     this.container.appendChild(this.wrapper);
+    this.container.appendChild(this.validationMessage);
 
     this.syncView(context);
   }
@@ -100,8 +94,14 @@ export class PhoneNumberControl implements ComponentFramework.StandardControl<II
         return;
       }
 
-      // Fall back to tel: URI — OS or default calling app handles it
-      window.open(`tel:${this.currentValue}`);
+      // Try Dynamics openUrl first, then browser-level tel fallback.
+      const xrm = (window as any).Xrm;
+      if (typeof xrm?.Navigation?.openUrl === "function") {
+        xrm.Navigation.openUrl(`tel:${this.currentValue}`);
+        return;
+      }
+
+      window.location.href = `tel:${this.currentValue}`;
     } catch {
       // Never let dial errors break interaction with the form.
     }
@@ -113,6 +113,7 @@ export class PhoneNumberControl implements ComponentFramework.StandardControl<II
 
     const nextE164Value = this.toE164(nextDisplayValue);
     this.setValidity(nextDisplayValue, nextE164Value);
+    this.hasUncommittedInvalidInput = nextDisplayValue !== "" && nextE164Value === "";
     this.dialButton.disabled = !nextE164Value;
 
     if (nextDisplayValue === "") {
@@ -120,12 +121,14 @@ export class PhoneNumberControl implements ComponentFramework.StandardControl<II
         this.currentValue = "";
         this.notifyOutputChanged();
       }
+      this.hasUncommittedInvalidInput = false;
       return;
     }
 
     if (nextE164Value && nextE164Value !== this.currentValue) {
       this.currentValue = nextE164Value;
       this.notifyOutputChanged();
+      this.hasUncommittedInvalidInput = false;
     }
   };
 
@@ -142,6 +145,8 @@ export class PhoneNumberControl implements ComponentFramework.StandardControl<II
         this.notifyOutputChanged();
       }
 
+      this.hasUncommittedInvalidInput = false;
+
       return;
     }
 
@@ -152,12 +157,14 @@ export class PhoneNumberControl implements ComponentFramework.StandardControl<II
       this.input.value = this.formatForDisplay(nextE164Value);
       this.setValidity(this.input.value, nextE164Value);
       this.dialButton.disabled = false;
+      this.hasUncommittedInvalidInput = false;
       this.notifyOutputChanged();
       return;
     }
 
     this.input.value = this.formatWhileTyping(trimmedValue);
     this.setValidity(this.input.value, "");
+    this.hasUncommittedInvalidInput = true;
     this.dialButton.disabled = true;
   };
 
@@ -183,10 +190,16 @@ export class PhoneNumberControl implements ComponentFramework.StandardControl<II
       this.dialButton.style.display = isDisabled ? "none" : "flex";
 
       const boundValue = phoneNumberRaw ?? "";
-      const nextE164Value = this.toE164(boundValue) || this.currentValue;
+      const nextE164Value = this.toE164(boundValue);
 
       // Skip update only while the user is actively typing; always refresh after save
       if (document.activeElement === this.input) {
+        return;
+      }
+
+      // Keep invalid typed text visible instead of silently snapping back to last valid value.
+      if (this.hasUncommittedInvalidInput && boundValue === this.currentValue) {
+        this.updateWrapperState();
         return;
       }
 
@@ -204,6 +217,7 @@ export class PhoneNumberControl implements ComponentFramework.StandardControl<II
         : this.formatWhileTyping(boundValue);
 
       this.setValidity(this.input.value, nextE164Value);
+      this.hasUncommittedInvalidInput = this.input.value !== "" && nextE164Value === "";
       this.updateWrapperState();
     } catch {
       // Keep the control load-safe in form designer even if runtime context is incomplete.
@@ -213,6 +227,7 @@ export class PhoneNumberControl implements ComponentFramework.StandardControl<II
       this.dialButton.disabled = true;
       this.dialButton.style.display = "flex";
       this.setValidity("", "");
+      this.hasUncommittedInvalidInput = false;
       this.updateWrapperState();
     }
   }
@@ -302,6 +317,8 @@ export class PhoneNumberControl implements ComponentFramework.StandardControl<II
   private setValidity(displayValue: string, e164Value: string): void {
     const isInvalid = displayValue !== "" && e164Value === "";
     this.input.setAttribute("aria-invalid", String(isInvalid));
+    this.validationMessage.hidden = !isInvalid;
+    this.validationMessage.textContent = isInvalid ? VALIDATION_MESSAGE_TEXT : "";
     this.updateWrapperState();
   }
 }
