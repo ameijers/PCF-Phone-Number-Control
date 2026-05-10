@@ -1,32 +1,35 @@
-# Building a Phone Number PCF Control for Dynamics 365
+# Building a Phone Number PCF Control for Dynamics 365 Contact Center
 
-Phone number fields look simple until people start using them.
+_A practical look at flexible phone number input, clearer validation, and Contact Center-aware calling in a single PCF field control._
 
-One user types `0639896134`, another types `+31(0)6 39 89 61 34`, and someone else pastes `0031 6 39896134`. All of them mean the same thing, but without consistent handling the data in Dataverse quickly becomes messy. That inconsistency affects more than appearance. It can break integrations, make outbound calling workflows harder, and complicate downstream validation.
+When you are working with phone number fields in Dynamics 365, the details matter very quickly.
 
-That was the reason for building this Power Apps Component Framework control for Dynamics 365: let users enter phone numbers in a natural way, show the value back in a readable format, and store the actual column value in E.164.
+One person types a local number. Another pastes an international number with spaces and punctuation. A third expects the call button to behave like the rest of Dynamics 365 Contact Center. Before long, a simple field becomes a source of friction.
 
-## The Goal
+That was the reason for building this Power Apps Component Framework control. It lets users enter phone numbers in a natural way, shows the value back in a readable format, surfaces validation clearly, stores the final value in E.164, and uses the Contact Center dialer when it is available.
 
-The control solves two problems at the same time.
+## Goal
 
-First, it improves the editing experience. Users should be able to enter a phone number without having to think about strict formatting rules. Spaces, punctuation, and local notation should not get in the way.
+The control is trying to solve two things at once.
 
-Second, it improves data quality. Regardless of how the number is entered, the value saved to the Dataverse phone number column should be normalized to E.164, such as `+31639896134`.
+First, it improves the editing experience. People should be able to type a phone number without worrying about strict formatting rules. Spaces, punctuation, and local notation should not get in the way.
 
-That combination gives you a cleaner user experience and more reliable data for integrations, calling platforms, SMS providers, and reporting.
+Second, it improves the stored data. Regardless of how the number is entered, the value written back to Dataverse should be normalized to E.164, such as `+31639896134`.
 
-## What the Control Does
+That combination gives you cleaner input, better validation, and more reliable downstream use in calling and integration scenarios.
+
+## What It Does
 
 The control is designed for phone number columns in Dynamics 365 and behaves as follows:
 
 - Users can type or paste a phone number in a loose format.
-- While typing, the control applies international-style spacing to keep the value readable.
-- When the user leaves the field, the number is normalized again and shown in a clean formatted version.
+- While typing, the control keeps the value readable.
+- If the number is invalid, the field keeps the user’s text and shows a clear validation message.
+- When the number is valid, the value is normalized and displayed in an international format.
 - The value returned to Dataverse is stored in E.164.
 - If a user enters a local number without a `+` prefix, the control can interpret it using an optional `defaultRegion` input such as `NL`.
 
-In practice that means a user can type a Dutch mobile number in a familiar local way, while the database still receives a canonical international value.
+That means a Dutch mobile number can still be entered in a natural local format, while Dataverse receives a canonical international value.
 
 ## Why E.164 Matters
 
@@ -37,11 +40,11 @@ For example:
 - Displayed value: `+31 6 39896134`
 - Stored value: `+31639896134`
 
-This format is useful because it removes ambiguity. Systems no longer need to guess which country a number belongs to, and integration points get a consistent string to work with.
+This matters because it removes ambiguity. Systems no longer need to guess which country a number belongs to, and integrations get a consistent string to work with.
 
-If your Dynamics 365 environment connects to telephony providers, marketing platforms, customer service tools, or workflow automation, that consistency is worth a lot.
+If your Dynamics 365 environment connects to telephony providers, customer service tools, or workflow automation, that consistency is worth a lot.
 
-## Why a PCF Control Is the Right Fit
+## Why PCF
 
 There are several ways to influence how users enter data in model-driven apps, but a PCF control is the right place when you want to own the full input experience.
 
@@ -50,11 +53,11 @@ With PCF, the behavior lives directly in the field control:
 - Formatting happens close to the user interaction.
 - The Dataverse column still remains the source of truth.
 - The control can be reused across forms and tables.
-- You can add configuration, such as a default country or region.
+- You can add configuration such as a default country or region.
 
-This approach avoids pushing phone-number cleanup into plugins, Power Automate flows, or client-side form scripts after the value is already entered incorrectly.
+This avoids pushing phone-number cleanup into plugins, Power Automate flows, or client-side form scripts after the value is already entered incorrectly.
 
-## Implementation Approach
+## Implementation
 
 The control is implemented in TypeScript as a standard field-bound PCF control.
 
@@ -63,16 +66,16 @@ The manifest defines two properties:
 - `phoneNumber`: the bound Dataverse phone field.
 - `defaultRegion`: an optional input property used to interpret local numbers.
 
-The control itself uses a single telephone input and keeps two representations of the value in play:
+The control itself keeps two representations of the value in play:
 
 - A formatted display value for the user.
 - A normalized E.164 value for Dataverse.
 
 That distinction is the key design choice. The user should see a number that is easy to read, but the database should receive a value optimized for consistency and interoperability.
 
-## Parsing and Formatting
+## Parsing and Dialing
 
-The control uses `libphonenumber-js`, which is a practical choice because it already handles country-aware parsing, validation, and international formatting.
+The control uses `libphonenumber-js`, which is a practical choice because it handles country-aware parsing, validation, and international formatting.
 
 The flow is straightforward:
 
@@ -80,11 +83,14 @@ The flow is straightforward:
 2. Apply as-you-type formatting for readability.
 3. Try to parse the number with the configured region when needed.
 4. If the number is valid, return the E.164 representation through `getOutputs()`.
-5. On blur, update the visible value to a polished international display format.
+5. If the number is invalid, show a visible error message and keep the current text in place.
+6. On blur, update the visible value to a polished international display format when possible.
 
-This makes the control forgiving during editing, while still keeping the stored value strict.
+The call button first tries the Dynamics Contact Center dialer through `Microsoft.CIFramework`. If that API is available in the host, the control uses it. If not, it falls back to a standard `tel:` action.
 
-## Example Scenario
+That is the piece that matters for Contact Center scenarios. When the host exposes the CIF/CIFramework APIs, the control does not try to invent its own calling experience.
+
+## Example
 
 Imagine a user in the Netherlands enters:
 
@@ -99,7 +105,7 @@ The result can then be:
 
 That is exactly the kind of conversion this control is intended to handle.
 
-## Benefits in Real Projects
+## Benefits
 
 The biggest advantage is that users do not need to be trained on phone-number standards. They can type naturally, and the control handles normalization for them.
 
@@ -108,61 +114,39 @@ Beyond that, the control helps with:
 - Better data quality in Dataverse.
 - More reliable outbound integrations.
 - Consistent formatting across forms.
-- Less cleanup logic elsewhere in the solution.
+- Clearer validation when a number is wrong.
 - A better user experience on phone number fields.
 
 It is a small component, but it improves both usability and data integrity in a place where organizations often accumulate avoidable inconsistency.
 
-## Project Structure
+## Packaging
 
-The solution is intentionally small and focused:
+To deploy this control, build the PCF project and package it as a managed Dataverse solution.
 
-- `ControlManifest.Input.xml` defines the PCF control contract.
-- `index.ts` contains the control logic.
-- `css/PhoneNumberControl.css` provides field styling.
-- `strings/PhoneNumberControl.1033.resx` contains display labels and descriptions.
-- `PhoneNumberControl.pcfproj` enables Dataverse solution packaging.
-- `INSTALLATION.md` documents installation, packaging, and validation steps.
+For this repository, the managed package is generated at:
 
-## Packaging and Install Notes
+- `pcfsolution/bin/Debug/pcfsolution_1.0.6_managed.zip`
 
-To deploy this control to a Dataverse environment, build and package through a solution project (`pcfsolution`) and import the generated zip.
+That is the file to import when updating the currently deployed solution.
 
-For this repository, the package is generated at:
+## Verification
 
-- `pcfsolution/bin/Debug/pcfsolution.zip`
-
-The same output path is used for both unmanaged and managed builds, so if you need both files, copy or rename the unmanaged zip before running the managed build.
-
-## How to Verify It Worked
-
-After importing the solution and binding the control to a phone field:
+After importing the managed solution and binding the control to a phone field:
 
 1. Verify solution import completed successfully.
 2. Verify the control is active on the phone field and the form is published.
 3. Enter local and international numbers and save the record.
 4. Confirm the displayed value is cleanly formatted.
-5. Confirm the stored Dataverse value is E.164.
-6. Test invalid input and confirm it does not persist as a valid E.164 value.
+5. Confirm invalid values show a message instead of silently reverting.
+6. Confirm the call button uses the Contact Center dialer when `CIFramework` is available.
+7. Confirm the stored Dataverse value is E.164.
 
 This keeps the control easy to maintain and easy to extend.
 
-## Possible Next Steps
-
-There are several directions to expand this control further:
-
-- Add inline validation messaging for invalid numbers.
-- Support region selection next to the input field.
-- Add formatting presets for specific business scenarios.
-- Extend it with click-to-call behavior.
-- Add tests around parsing and output behavior.
-
-The current version focuses on the most important foundation: flexible input, clean display, and consistent storage.
-
 ## Final Thoughts
 
-Phone numbers are one of those data types that seem trivial until inconsistent entry starts creating operational friction. A dedicated PCF control is a practical way to solve that at the UI layer without compromising the underlying data model.
+Phone numbers are one of those data types that look simple until they start creating operational friction.
 
-By combining a forgiving input experience with strict E.164 storage, this control makes Dynamics 365 phone fields easier to use and far more dependable.
+This control keeps the input experience forgiving, the validation visible, the stored value strict, and the calling behavior aligned with Contact Center when the host supports it.
 
 If you are building model-driven apps and care about clean customer data, this is the kind of small UX improvement that pays off quickly.

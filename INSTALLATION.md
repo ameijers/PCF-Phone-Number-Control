@@ -1,22 +1,22 @@
 # Install in a Dataverse environment
 
-Follow these steps to package and install this PCF control in Dynamics 365 / Power Apps.
+This package is meant to be imported as a managed solution update into an existing Dataverse environment.
 
-## 1. Prerequisites
+## Prerequisites
 
-Install and verify the following tools:
+You need the following tools installed:
 
 - Node.js LTS and npm
 - .NET SDK
 - Power Platform CLI (`pac`)
 
-Install Power Platform CLI on macOS:
+On macOS, install Power Platform CLI with:
 
 ```bash
 dotnet tool install --global Microsoft.PowerApps.CLI.Tool --version 1.52.1
 ```
 
-Add the global .NET tools folder to your zsh PATH:
+If the `.NET` global tools folder is not already on your path, add it to `~/.zprofile`:
 
 ```bash
 cat << 'EOF' >> ~/.zprofile
@@ -26,9 +26,9 @@ EOF
 source ~/.zprofile
 ```
 
-Note: Newer PAC package versions are currently failing with `DotnetToolSettings.xml` errors in dotnet tool install. Version `1.52.1` is a confirmed working fallback on macOS.
+Version `1.52.1` is the fallback that has been working reliably on macOS in this workspace.
 
-Verify your setup:
+Verify the toolchain:
 
 ```bash
 node -v
@@ -37,9 +37,9 @@ dotnet --version
 pac
 ```
 
-## 2. Build the PCF control
+## Build the PCF control
 
-From this project root:
+From the project root:
 
 ```bash
 npm install
@@ -48,101 +48,61 @@ npm run build
 
 This builds `Promethean.Academy.Controls.PhoneNumberControl`.
 
-## 3. Authenticate to your Dataverse environment
+## Create the managed solution package
+
+The solution project is already set up in `pcfsolution`.
+
+Build the managed package with:
 
 ```bash
-pac auth create --environment https://YOURORG.crm.dynamics.com
-pac auth list
-```
-
-If you have multiple profiles, select the right one:
-
-```bash
-pac auth select --index 1
-```
-
-## 4. Create a solution packaging project
-
-Create a folder for packaging and initialize a Dataverse solution project.
-
-Important: `--publisher-name` cannot contain spaces.
-
-```bash
-mkdir pcfsolution
 cd pcfsolution
-pac solution init --publisher-name "PrometheanAcademy" --publisher-prefix "pa"
-```
-
-## 5. Add this PCF project to the solution
-
-From inside the solution folder, add the repository PCF project file:
-
-```bash
-pac solution add-reference --path ../PhoneNumberControl.pcfproj
-```
-
-This repository includes `PhoneNumberControl.pcfproj` for solution packaging.
-
-## 6. Build the solution package
-
-```bash
-dotnet build
-```
-
-This generates the unmanaged solution `.zip` in:
-
-`pcfsolution/bin/Debug/pcfsolution.zip`
-
-For a managed package, run:
-
-```bash
 dotnet build /p:SolutionPackageType=Managed
 ```
 
-Managed output location is the same file path:
+The managed solution zip is generated at:
 
 `pcfsolution/bin/Debug/pcfsolution.zip`
 
-If you need both files, copy/rename the unmanaged zip before running the managed build.
+For convenience, this workspace also keeps a versioned copy here:
 
-## 7. Import the solution
+`pcfsolution/bin/Debug/pcfsolution_1.0.6_managed.zip`
 
-1. Go to `https://make.powerapps.com` and select your target environment.
+That is the file to use when updating an existing deployed solution.
+
+## Import the update
+
+1. Go to `https://make.powerapps.com` and select the target environment.
 2. Open **Solutions**.
 3. Select **Import solution**.
-4. Upload the generated solution `.zip`.
-5. Complete import.
+4. Upload `pcfsolution_1.0.6_managed.zip`.
+5. Complete the import.
 
-Use unmanaged in development/test and managed in production.
+Because this is a managed package, it should be used for production-style environments and for upgrading the deployed solution.
 
-## 8. Attach the control to a phone column
+## Attach the control to a phone field
 
-1. Open the target table and form.
-2. Select the phone number field.
+1. Open the table and form where the phone field lives.
+2. Select the phone number column.
 3. Add a custom control and choose `PA Phone Number (E.164)`.
-4. In component properties, map `Phone Number` to the current phone column.
-5. For `Default Region (Static, Optional)`, use a static value like `NL` or `US` if users type local numbers without `+`.
+4. Map `Phone Number` to the phone column.
+5. Optionally set `Default Region` to a static region code such as `NL`, `US`, or `BE`.
 
-Notes about the property pane:
-- The checkbox enables that property mapping for the current form factor.
-- The `Static` input means you are supplying a fixed text value directly (recommended for `Default Region`).
-- If `Static` is left empty, locale auto-detection is used as fallback.
-5. Save and publish.
+If users enter local numbers without a `+` prefix, the default region helps the control interpret the value correctly.
 
-## 9. Validate
+## What to verify after import
 
-1. Confirm solution import status is **Success** in the Power Apps maker portal.
-2. Confirm the custom control is attached to the target phone column and published.
-3. Enter a local number (without `+`) and an international number (with `+`).
-4. Save the record and reopen it.
-5. Confirm the displayed value is readable and formatted.
-6. Confirm the stored Dataverse value is E.164 (for example `+31639896134`).
-7. Enter an invalid value and verify it is not persisted as a valid E.164 value.
+1. The solution import completes successfully.
+2. The form shows the updated phone control.
+3. Invalid numbers stay visible and show an error message instead of silently reverting.
+4. The call button is visible and uses the Dynamics Contact Center dialer when `CIFramework` is available.
+5. The value saved to Dataverse is normalized to E.164.
 
-## 10. Upgrade process
+## Upgrade process
 
-When updating the control:
+When you change the control again, follow the same sequence:
 
-1. Increase the control version in `ControlManifest.Input.xml`.
-2. Rebuild the PCF project and solution package.
-3. Re-import the updated solution.
+1. Increase the version in `ControlManifest.Input.xml`.
+2. Increase the solution version in `pcfsolution/src/Other/Solution.xml`.
+3. Rebuild the PCF project.
+4. Rebuild the managed solution package.
+5. Import the new managed zip into the target environment.
