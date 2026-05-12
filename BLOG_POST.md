@@ -1,152 +1,363 @@
 # Building a Phone Number PCF Control for Dynamics 365 Contact Center
 
-_A practical look at flexible phone number input, clearer validation, and Contact Center-aware calling in a single PCF field control._
+*A deep dive into how the control handles parsing, formatting, validation, and Contact Center-aware dialing — and why each decision was made.*
 
-When you are working with phone number fields in Dynamics 365, the details matter very quickly.
+---
 
-One person types a local number. Another pastes an international number with spaces and punctuation. A third expects the call button to behave like the rest of Dynamics 365 Contact Center. Before long, a simple field becomes a source of friction.
+Phone numbers are deceptively simple. They look like text fields, but the moment you start accepting input from real users, you realise how many ways a valid number can be written. `+31639896134`. `06 39 89 61 34`. `0031 6 39896134`. All the same number, all written differently. And if your Contact Center integration downstream expects E.164, only one of those three will work without conversion.
 
-That was the reason for building this Power Apps Component Framework control. It lets users enter phone numbers in a natural way, shows the value back in a readable format, surfaces validation clearly, stores the final value in E.164, and uses the Contact Center dialer when it is available.
+That is the problem this PCF control solves. The full source is [on GitHub](https://github.com/ameijers/PCF-Phone-Number-Control). This post walks through how it works under the hood.
 
-## Goal
+---
 
-The control is trying to solve two things at once.
+## Why PCF and Not a Script
 
-First, it improves the editing experience. People should be able to type a phone number without worrying about strict formatting rules. Spaces, punctuation, and local notation should not get in the way.
+The instinct is often to handle phone number normalization in a Power Automate flow or an on-save plugin. That works, but it pushes the feedback loop far away from the user. They type a number, save the record, wait for the platform to process it, and only then find out the number was invalid. By then, the context is gone.
 
-Second, it improves the stored data. Regardless of how the number is entered, the value written back to Dataverse should be normalized to E.164, such as `+31639896134`.
+A PCF control keeps the logic in the field itself. Validation happens while typing. The user sees the result immediately. And the normalized value is written to Dataverse the moment the input is valid, without any roundtrip.
 
-That combination gives you cleaner input, better validation, and more reliable downstream use in calling and integration scenarios.
+---
 
-## What It Does
+## The Dual-Value Design
 
-The control is designed for phone number columns in Dynamics 365 and behaves as follows:
+The most important design choice in this control is that it keeps two representations of the phone number at all times:
 
-- Users can type or paste a phone number in a loose format.
-- While typing, the control keeps the value readable.
-- If the number is invalid, the field keeps the user’s text and shows a clear validation message.
-- When the number is valid, the value is normalized and displayed in an international format.
-- The value returned to Dataverse is stored in E.164.
-- If a user enters a local number without a `+` prefix, the control can interpret it using an optional `defaultRegion` input such as `NL`.
+- A **display value**: what the user sees in the input field, formatted for readability.
+- A **stored value**: the E.164 string that gets written back to Dataverse via `getOutputs()`.
 
-That means a Dutch mobile number can still be entered in a natural local format, while Dataverse receives a canonical international value.
+These two are always kept in sync, but they are never the same string. `+31 6 39896134` is what you show. `+31639896134` is what you store.
 
-## Why E.164 Matters
+```typescript
+public getOutputs(): IOutputs {
+  return {
+    phoneNumber: this.currentValue || undefined
+  };
+}
+```
 
-E.164 is the standard international phone number format. It starts with a `+`, followed by country code and national number, with no spaces or decorative characters.
+`this.currentValue` always holds the E.164 value. It is only updated when a valid, parseable number is found. Invalid input does not touch it.
 
-For example:
+---
 
-- Displayed value: `+31 6 39896134`
-- Stored value: `+31639896134`
+## Parsing: libphonenumber-js
 
-This matters because it removes ambiguity. Systems no longer need to guess which country a number belongs to, and integrations get a consistent string to work with.
+All parsing and formatting is handled by `libphonenumber-js`. This is the right library for this job because it understands country codes, local number formats, and international notation — including the ambiguity between them.
 
-If your Dynamics 365 environment connects to telephony providers, customer service tools, or workflow automation, that consistency is worth a lot.
+The core parsing method is `parsePhoneNumber`:
 
-## Why PCF
+```typescript
+private parsePhoneNumber(value: string) {
+  const trimmedValue = value.trim();
 
-There are several ways to influence how users enter data in model-driven apps, but a PCF control is the right place when you want to own the full input experience.
+  if (trimmedValue === "") {
+    return undefined;
+  }
 
-With PCF, the behavior lives directly in the field control:
+  const parsedNumber = this.defaultRegion
+    ? parsePhoneNumberFromString(trimmedValue, this.defaultRegion)
+    : parsePhoneNumberFromString(trimmedValue);
 
-- Formatting happens close to the user interaction.
-- The Dataverse column still remains the source of truth.
-- The control can be reused across forms and tables.
-- You can add configuration such as a default country or region.
+  if (parsedNumber?.isValid()) {
+    return parsedNumber;
+  }
 
-This avoids pushing phone-number cleanup into plugins, Power Automate flows, or client-side form scripts after the value is already entered incorrectly.
+  if (!trimmedValue.startsWith("+")) {
+    return undefined;
+  }
 
-## Implementation
+  const sanitizedValue = `+${trimmedValue.replace(/\D/g, "")}`;
+  const fallbackNumber = parsePhoneNumberFromString(sanitizedValue);
+  return fallbackNumber?.isValid() ? fallbackNumber : undefined;
+}
+```
 
-The control is implemented in TypeScript as a standard field-bound PCF control.
+There are two parsing attempts. The first uses `defaultRegion` if one is configured — this allows local numbers like `06 39 89 61 34` to be interpreted as Dutch numbers when `defaultRegion = NL` is set. The second is a fallback for numbers that start with `+` but contain non-numeric characters (like spaces or dashes). It strips everything except digits and the leading `+`, then tries again.
 
-The manifest defines two properties:
+If neither attempt produces a valid number, the method returns `undefined`. The calling code handles that as an invalid state.
 
-- `phoneNumber`: the bound Dataverse phone field.
-- `defaultRegion`: an optional input property used to interpret local numbers.
+---
 
-The control itself keeps two representations of the value in play:
+## Region Detection
 
-- A formatted display value for the user.
-- A normalized E.164 value for Dataverse.
+The `defaultRegion` property can be set explicitly as a PCF input parameter. But if it is not set, the control tries to derive a country code from the browser's locale:
 
-That distinction is the key design choice. The user should see a number that is easy to read, but the database should receive a value optimized for consistency and interoperability.
+```typescript
+private detectRegionFromLocale(): CountryCode | undefined {
+  const lang = navigator.language ?? "";
+  const parts = lang.split("-");
+  if (parts.length >= 2) {
+    return this.normalizeRegion(parts[parts.length - 1]);
+  }
+  return undefined;
+}
+```
 
-## Parsing and Dialing
+A locale tag like `nl-NL` splits into `["nl", "NL"]`. The last segment is taken as the country code and validated against `libphonenumber-js`'s `isSupportedCountry` before being used.
 
-The control uses `libphonenumber-js`, which is a practical choice because it handles country-aware parsing, validation, and international formatting.
+```typescript
+private normalizeRegion(value: MaybeString): CountryCode | undefined {
+  const trimmedValue = value?.trim().toUpperCase();
 
-The flow is straightforward:
+  if (!trimmedValue || trimmedValue.length !== 2) {
+    return undefined;
+  }
 
-1. Capture the raw input from the user.
-2. Apply as-you-type formatting for readability.
-3. Try to parse the number with the configured region when needed.
-4. If the number is valid, return the E.164 representation through `getOutputs()`.
-5. If the number is invalid, show a visible error message and keep the current text in place.
-6. On blur, update the visible value to a polished international display format when possible.
+  if (!isSupportedCountry(trimmedValue as CountryCode)) {
+    return undefined;
+  }
 
-The call button first tries the Dynamics Contact Center dialer through `Microsoft.CIFramework`. If that API is available in the host, the control uses it. If not, it falls back to a standard `tel:` action.
+  return trimmedValue as CountryCode;
+}
+```
 
-That is the piece that matters for Contact Center scenarios. When the host exposes the CIF/CIFramework APIs, the control does not try to invent its own calling experience.
+If neither the explicit input nor the locale produces a valid country code, `defaultRegion` stays `undefined`. In that case, only numbers with an explicit `+` prefix will parse correctly, because the library has no country context to fall back on.
 
-## Example
+---
 
-Imagine a user in the Netherlands enters:
+## Formatting While Typing
 
-`06 39 89 61 34`
+While the user is actively typing, the control uses `AsYouType` from `libphonenumber-js` to keep the value readable without interrupting input:
 
-If the control has `defaultRegion = NL`, it can understand that the number is Dutch even though the user did not type `+31`.
+```typescript
+private formatWhileTyping(value: string): string {
+  const trimmedValue = value.trim();
 
-The result can then be:
+  if (trimmedValue === "") {
+    return "";
+  }
 
-- Displayed to the user as: `+31 6 39896134`
-- Stored in Dataverse as: `+31639896134`
+  try {
+    const formatter = this.defaultRegion
+      ? new AsYouType(this.defaultRegion)
+      : new AsYouType();
+    const formattedValue = formatter.input(trimmedValue);
+    return formattedValue || trimmedValue;
+  } catch {
+    return trimmedValue;
+  }
+}
+```
 
-That is exactly the kind of conversion this control is intended to handle.
+`AsYouType` adds spaces and formatting characters as the user types, so `+316398` becomes `+31 6 398` progressively. If formatting fails for any reason, the original trimmed value is returned unchanged. The control never corrupts what the user typed.
 
-## Benefits
+---
 
-The biggest advantage is that users do not need to be trained on phone-number standards. They can type naturally, and the control handles normalization for them.
+## The Input Handler
 
-Beyond that, the control helps with:
+This is where things get coordinated. Every keystroke hits `handleInput`:
 
-- Better data quality in Dataverse.
-- More reliable outbound integrations.
-- Consistent formatting across forms.
-- Clearer validation when a number is wrong.
-- A better user experience on phone number fields.
+```typescript
+private readonly handleInput = (): void => {
+  const nextDisplayValue = this.formatWhileTyping(this.input.value);
+  this.input.value = nextDisplayValue;
 
-It is a small component, but it improves both usability and data integrity in a place where organizations often accumulate avoidable inconsistency.
+  const nextE164Value = this.toE164(nextDisplayValue);
+  this.setValidity(nextDisplayValue, nextE164Value);
+  this.hasUncommittedInvalidInput = nextDisplayValue !== "" && nextE164Value === "";
+  this.dialButton.disabled = !nextE164Value;
 
-## Packaging
+  if (nextDisplayValue === "") {
+    if (this.currentValue !== "") {
+      this.currentValue = "";
+      this.notifyOutputChanged();
+    }
+    this.hasUncommittedInvalidInput = false;
+    return;
+  }
 
-To deploy this control, build the PCF project and package it as a managed Dataverse solution.
+  if (nextE164Value && nextE164Value !== this.currentValue) {
+    this.currentValue = nextE164Value;
+    this.notifyOutputChanged();
+    this.hasUncommittedInvalidInput = false;
+  }
+};
+```
 
-For this repository, the managed package is generated at:
+A few things are worth noting here.
 
-- `pcfsolution/bin/Debug/pcfsolution_1.0.6_managed.zip`
+`notifyOutputChanged()` is only called when `currentValue` actually changes. Calling it on every keystroke would flood Dataverse with updates and cause unnecessary dirty state on the form.
 
-That is the file to import when updating the currently deployed solution.
+`hasUncommittedInvalidInput` is a flag that tracks whether the user has typed something that is not yet valid. This is important for `syncView`, which runs every time the PCF framework calls `updateView`. Without this flag, an intermediate invalid input would get overwritten by the last known good value every time the framework refreshes the control.
 
-## Verification
+The dial button is toggled based on whether there is a valid E.164 value. No valid number, no call button.
 
-After importing the managed solution and binding the control to a phone field:
+---
 
-1. Verify solution import completed successfully.
-2. Verify the control is active on the phone field and the form is published.
-3. Enter local and international numbers and save the record.
-4. Confirm the displayed value is cleanly formatted.
-5. Confirm invalid values show a message instead of silently reverting.
-6. Confirm the call button uses the Contact Center dialer when `CIFramework` is available.
-7. Confirm the stored Dataverse value is E.164.
+## The Blur Handler
 
-This keeps the control easy to maintain and easy to extend.
+On blur, the control tries to clean up whatever the user left behind:
+
+```typescript
+private readonly handleBlur = (): void => {
+  const trimmedValue = this.input.value.trim();
+
+  if (trimmedValue === "") {
+    this.input.value = "";
+    this.setValidity("", "");
+    this.dialButton.disabled = true;
+
+    if (this.currentValue !== "") {
+      this.currentValue = "";
+      this.notifyOutputChanged();
+    }
+
+    this.hasUncommittedInvalidInput = false;
+    return;
+  }
+
+  const nextE164Value = this.toE164(trimmedValue);
+
+  if (nextE164Value) {
+    this.currentValue = nextE164Value;
+    this.input.value = this.formatForDisplay(nextE164Value);
+    this.setValidity(this.input.value, nextE164Value);
+    this.dialButton.disabled = false;
+    this.hasUncommittedInvalidInput = false;
+    this.notifyOutputChanged();
+    return;
+  }
+
+  this.input.value = this.formatWhileTyping(trimmedValue);
+  this.setValidity(this.input.value, "");
+  this.hasUncommittedInvalidInput = true;
+  this.dialButton.disabled = true;
+};
+```
+
+If the number is valid on blur, the display value is upgraded to the full international format from `formatForDisplay`. So `+316398` typed quickly becomes `+31 6 398` while typing, and on blur, if a complete valid number was entered, it snaps to the clean international display format.
+
+If the number is still invalid on blur, the field keeps the user's input and shows the validation message. It does not silently revert to the last known good value — that would be confusing.
+
+---
+
+## Validation Display
+
+Validation state is surfaced through two mechanisms:
+
+```typescript
+private setValidity(displayValue: string, e164Value: string): void {
+  const isInvalid = displayValue !== "" && e164Value === "";
+  this.input.setAttribute("aria-invalid", String(isInvalid));
+  this.validationMessage.hidden = !isInvalid;
+  this.validationMessage.textContent = isInvalid ? VALIDATION_MESSAGE_TEXT : "";
+  this.updateWrapperState();
+}
+```
+
+`aria-invalid` is set on the input element, which triggers the CSS `invalid` styling via the wrapper class. The validation message `div` is hidden or shown, and its `role="alert"` with `aria-live="polite"` ensures screen readers announce it without being intrusive.
+
+The validation message element is identified by a randomly generated ID:
+
+```typescript
+private validationMessageId = `pcf-phone-validation-message-${Math.random().toString(36).slice(2, 10)}`;
+```
+
+This is done so that multiple instances of the control on the same form do not share the same `aria-describedby` target. Each input correctly references its own message element.
+
+---
+
+## The Dial Button and Contact Center Integration
+
+The call button appears to the right of the input. It is disabled until a valid number is present.
+
+When clicked, the handler works through a priority chain:
+
+```typescript
+private readonly handleDial = (): void => {
+  if (!this.currentValue) return;
+
+  try {
+    const cif = (window as any).Microsoft?.CIFramework;
+    if (typeof cif?.outboundCommunication === "function") {
+      cif.outboundCommunication(this.currentValue);
+      return;
+    }
+
+    const xrm = (window as any).Xrm;
+    if (typeof xrm?.Navigation?.openUrl === "function") {
+      xrm.Navigation.openUrl(`tel:${this.currentValue}`);
+      return;
+    }
+
+    window.location.href = `tel:${this.currentValue}`;
+  } catch {
+    // Never let dial errors break interaction with the form.
+  }
+};
+```
+
+The first check is for `Microsoft.CIFramework.outboundCommunication`. This is the Channel Integration Framework API that Dynamics 365 Contact Center exposes when a soft phone is active. If it is available, the control uses it — which means the call goes through the CCaaS dialer rather than the system phone app. This is the piece that makes the control useful in a Contact Center context specifically.
+
+If CIF is not available, it falls back to `Xrm.Navigation.openUrl` with a `tel:` URI, which respects the Dynamics navigation context. If that is also not available, it falls back to `window.location.href`, which opens whatever the operating system registered for `tel:` links.
+
+The whole block is wrapped in a try/catch because a dial failure should never interfere with the user's ability to continue working in the form.
+
+---
+
+## The Icon
+
+The dial button uses an inline SVG rather than a font icon or an image:
+
+```typescript
+function createCallIcon(): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", "0 0 20 20");
+  // ...
+}
+```
+
+This is intentional. Font icons depend on the icon font being loaded and available in the PCF host, which is not guaranteed across all Dynamics form configurations and embedding contexts. An inline SVG renders correctly everywhere, with no dependencies. The path data is taken from the Fluent UI system icons repository (MIT licensed) — specifically the "Call 20 Regular" icon that Dynamics itself uses for phone field call buttons, so it visually matches the platform.
+
+---
+
+## Protecting Against updateView Thrash
+
+The PCF framework calls `updateView` whenever the bound value or context changes. This creates a problem: if the user is mid-input and the framework triggers a view refresh, the control could overwrite what the user is typing with the last known good value from Dataverse.
+
+The `syncView` method handles this carefully:
+
+```typescript
+// Skip update only while the user is actively typing; always refresh after save
+if (document.activeElement === this.input) {
+  return;
+}
+
+// Keep invalid typed text visible instead of silently snapping back to last valid value.
+if (this.hasUncommittedInvalidInput && boundValue === this.currentValue) {
+  this.updateWrapperState();
+  return;
+}
+```
+
+If the input has focus, `syncView` exits early. The user is typing; do not interrupt them.
+
+If the user has typed something invalid and the bound Dataverse value has not changed, the invalid text is kept in place. This prevents the control from silently reverting to `+31639896134` while the user is staring at `+316398xx` trying to correct a typo.
+
+---
+
+## Deploying
+
+Clone the repository from [GitHub](https://github.com/ameijers/PCF-Phone-Number-Control) and build it yourself. The control is packaged as a managed Dataverse solution:
+
+```bash
+npm run build
+cd pcfsolution
+msbuild /t:build /restore
+```
+
+Import the generated managed solution into your Dataverse environment, bind the control to any phone number column in a model-driven form, and optionally configure the `defaultRegion` input (for example, `NL` for the Netherlands).
+
+After deploying, verify by:
+
+1. Entering a local number without a country code — it should resolve to the international format on blur.
+2. Entering an obviously invalid string — the validation message should appear.
+3. Entering a valid number and clicking the call button — in a Contact Center session, it should trigger the CIF dialer.
+4. Checking the saved record value in Dataverse — it should be E.164, not the display format.
+
+---
 
 ## Final Thoughts
 
-Phone numbers are one of those data types that look simple until they start creating operational friction.
+Phone number fields are one of those places where a small amount of extra investment in the input experience pays dividends in data quality for a long time. Users do not need to know what E.164 is. They type a number in whatever format feels natural to them, and the control handles the rest.
 
-This control keeps the input experience forgiving, the validation visible, the stored value strict, and the calling behavior aligned with Contact Center when the host supports it.
-
-If you are building model-driven apps and care about clean customer data, this is the kind of small UX improvement that pays off quickly.
+The [GitHub repository](https://github.com/ameijers/PCF-Phone-Number-Control) has the full source, including the manifest and the PCF solution project. If you are building for a Contact Center environment and want consistent phone data in Dataverse without asking your users to change how they type, this is a practical starting point.
